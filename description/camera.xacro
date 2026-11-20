@@ -1,42 +1,47 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-  <!-- Camera lens at the CENTRE of the front face (+X), 120 mm from FLOOR (subtract chassis ground clearance).
-       Camera points forward in +X; y=0. Height is measured from the floor. -->
-  <xacro:property name="camera_height_above_bottom" value="${0.120 - chassis_ground_clearance}"/>
-  <joint name="camera_joint" type="fixed">
-    <parent link="chassis"/>
-    <child link="camera_link"/>
-    <origin xyz="${chassis_length/2.0} 0 ${camera_height_above_bottom}" rpy="0 0 0"/>
-  </joint>
+
+  <!-- Camera front center, height 120 mm from ground -->
+  <xacro:property name="camera_height_from_ground" value="0.120"/>
+  <xacro:property name="camera_x_from_base" value="0.125"/>
+  <xacro:property name="camera_y_from_base" value="0.000"/>
+  <xacro:property name="camera_z_from_base" value="${camera_height_from_ground - wheel_radius}"/>
+  <xacro:property name="camera_box_x" value="0.018"/>
+  <xacro:property name="camera_box_y" value="0.018"/>
+  <xacro:property name="camera_box_z" value="0.012"/>
+
   <link name="camera_link">
     <visual>
-      <!-- Small simplified camera module on front face. -->
-      <origin xyz="0.005 0 0" rpy="0 0 0"/>
-      <geometry><box size="0.010 0.025 0.024"/></geometry>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="${camera_box_x} ${camera_box_y} ${camera_box_z}"/>
+      </geometry>
       <material name="black"/>
     </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="${camera_box_x} ${camera_box_y} ${camera_box_z}"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.03"/>
+      <inertia ixx="1e-05" ixy="0.0" ixz="0.0" iyy="1e-05" iyz="0.0" izz="1e-05"/>
+    </inertial>
   </link>
+  <joint name="camera_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_link"/>
+    <origin xyz="${camera_x_from_base} ${camera_y_from_base} ${camera_z_from_base}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Optical frame for image pipeline -->
+  <link name="camera_link_optical"/>
   <joint name="camera_optical_joint" type="fixed">
     <parent link="camera_link"/>
     <child link="camera_link_optical"/>
-    <!-- Optical convention: +Z forward, +X right, +Y down. -->
-    <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
+    <origin xyz="0 0 0" rpy="-1.57079632679 0 -1.57079632679"/>
   </joint>
-  <link name="camera_link_optical"/>
-  <gazebo reference="camera_link">
-    <material>Gazebo/Black</material>
-    <sensor name="camera" type="camera">
-      <pose>0 0 0 0 0 0</pose>
-      <visualize>false</visualize>
-      <update_rate>10</update_rate>
-      <camera>
-        <horizontal_fov>1.089</horizontal_fov>
-        <image><format>R8G8B8</format><width>640</width><height>480</height></image>
-        <clip><near>0.05</near><far>8.0</far></clip>
-      </camera>
-      <plugin name="camera_controller" filename="libgazebo_ros_camera.so">
-        <frame_name>camera_link_optical</frame_name>
-      </plugin>
-    </sensor>
-  </gazebo>
+
 </robot>
