@@ -1,153 +1,131 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <!-- AMR geometry for physical dimensions, in metres.
+       +X forward, +Y left, +Z up.
+       base_link: ground-plane projection of the driven axle centre (z=0).
+       This matches an odom -> base_link transform with z=0.
+       Assumed caster location: 75 mm ahead of chassis centre; MEASURE before
+       relying on Gazebo physics. Wheel width is also a visual estimate. -->
 
-  <!-- ================= Geometry / dimensions ================= -->
-
-
-  <!-- Body -->
   <xacro:property name="body_length" value="0.250"/>
-  <xacro:property name="body_width"  value="0.250"/>
+  <xacro:property name="body_width" value="0.250"/>
   <xacro:property name="body_height" value="0.150"/>
-  <xacro:property name="body_color"  value="orange"/>
-
-  <!-- Ground / wheel geometry -->
   <xacro:property name="ground_clearance" value="0.073"/>
+
   <xacro:property name="wheel_radius" value="0.0435"/>
   <xacro:property name="wheel_length" value="0.020"/>
   <xacro:property name="wheel_separation" value="0.300"/>
-  <xacro:property name="wheel_x_from_center" value="0.085"/>
+  <xacro:property name="axle_to_rear_face" value="0.040"/>
+  <!-- The axle is 40 mm in front of rear face: chassis centre is +85 mm
+       forward from axle. Both wheel joints remain at X=0 of base_link. -->
+  <xacro:property name="body_x_from_base" value="${body_length/2.0 - axle_to_rear_face}"/>
+  <xacro:property name="body_center_z_from_base" value="${ground_clearance + body_height/2.0}"/>
 
-  <!-- Caster (simple placeholder) -->
   <xacro:property name="caster_radius" value="0.012"/>
-  <xacro:property name="caster_x_from_center" value="-0.085"/>
+  <xacro:property name="caster_x_in_chassis" value="0.075"/>
+  <xacro:property name="caster_post_radius" value="0.007"/>
+  <xacro:property name="caster_post_length" value="${ground_clearance - 2.0*caster_radius}"/>
 
-  <!-- base_link at midpoint between the two drive wheel centers -->
-  <!-- Chassis center is above base_link by wheel_radius + (body_height/2 - ground_clearance) -->
-  <xacro:property name="chassis_z_from_base" value="${wheel_radius + (body_height/2.0 - ground_clearance)}"/>
+  <!-- Approximate component masses summing to ~4 kg. Not measured inertias. -->
+  <xacro:property name="chassis_mass" value="3.50"/>
+  <xacro:property name="wheel_mass" value="0.15"/>
+  <xacro:property name="caster_mass" value="0.04"/>
+  <xacro:property name="caster_post_mass" value="0.01"/>
 
-  <material name="orange"><color rgba="1.0 0.35 0.0 1.0"/></material>
-  <material name="black"><color rgba="0.05 0.05 0.05 1.0"/></material>
+  <material name="orange"><color rgba="1.0 0.35 0.03 1.0"/></material>
+  <material name="black"><color rgba="0.07 0.07 0.08 1.0"/></material>
   <material name="white"><color rgba="0.95 0.95 0.95 1.0"/></material>
-  <material name="gray"><color rgba="0.6 0.6 0.6 1.0"/></material>
-
-  <!-- Optional footprint for nav -->
-  <link name="base_footprint"/>
-  <joint name="base_footprint_joint" type="fixed">
-    <parent link="base_footprint"/>
-    <child link="base_link"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-  </joint>
+  <material name="gray"><color rgba="0.55 0.55 0.55 1.0"/></material>
 
   <link name="base_link"/>
 
-  <!-- Chassis -->
   <link name="chassis">
     <visual>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <box size="${body_length} ${body_width} ${body_height}"/>
-      </geometry>
+      <geometry><box size="${body_length} ${body_width} ${body_height}"/></geometry>
       <material name="orange"/>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <box size="${body_length} ${body_width} ${body_height}"/>
-      </geometry>
-    </collision>
+    <collision><geometry><box size="${body_length} ${body_width} ${body_height}"/></geometry></collision>
     <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="4.0"/>
-      <inertia ixx="0.03" ixy="0.0" ixz="0.0" iyy="0.03" iyz="0.0" izz="0.05"/>
+      <mass value="${chassis_mass}"/>
+      <inertia ixx="${chassis_mass*(body_width*body_width+body_height*body_height)/12.0}"
+               ixy="0" ixz="0"
+               iyy="${chassis_mass*(body_length*body_length+body_height*body_height)/12.0}"
+               iyz="0"
+               izz="${chassis_mass*(body_length*body_length+body_width*body_width)/12.0}"/>
     </inertial>
   </link>
   <joint name="chassis_joint" type="fixed">
     <parent link="base_link"/>
     <child link="chassis"/>
-    <origin xyz="0 0 ${chassis_z_from_base}" rpy="0 0 0"/>
+    <origin xyz="${body_x_from_base} 0 ${body_center_z_from_base}" rpy="0 0 0"/>
   </joint>
 
-  <!-- Left drive wheel -->
-  <link name="left_wheel">
+  <!-- Cylinder geometry axis is local Z, turned into Y for the wheel.
+       Positive wheel joint angle means rolling forward (+X). -->
+  <xacro:macro name="amr_drive_wheel" params="side y">
+    <link name="${side}_wheel">
+      <visual>
+        <origin xyz="0 0 0" rpy="${pi/2.0} 0 0"/>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_length}"/></geometry>
+        <material name="black"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="${pi/2.0} 0 0"/>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_length}"/></geometry>
+      </collision>
+      <inertial>
+        <mass value="${wheel_mass}"/>
+        <inertia ixx="${wheel_mass*(3*wheel_radius*wheel_radius+wheel_length*wheel_length)/12.0}"
+                 ixy="0" ixz="0"
+                 iyy="${wheel_mass*wheel_radius*wheel_radius/2.0}"
+                 iyz="0"
+                 izz="${wheel_mass*(3*wheel_radius*wheel_radius+wheel_length*wheel_length)/12.0}"/>
+      </inertial>
+    </link>
+    <joint name="${side}_wheel_joint" type="continuous">
+      <parent link="base_link"/>
+      <child link="${side}_wheel"/>
+      <origin xyz="0 ${y} ${wheel_radius}" rpy="0 0 0"/>
+      <axis xyz="0 -1 0"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:amr_drive_wheel side="left" y="${wheel_separation/2.0}"/>
+  <xacro:amr_drive_wheel side="right" y="${-wheel_separation/2.0}"/>
+
+  <!-- Front swivelling caster: sphere is a visual approximation of the wheel;
+       a slim bracket reaches down from the chassis bottom. -->
+  <link name="caster_mount">
     <visual>
-      <origin xyz="0 0 0" rpy="${pi/2.0} 0 0"/>
-      <geometry>
-        <cylinder radius="${wheel_radius}" length="${wheel_length}"/>
-      </geometry>
-      <material name="black"/>
+      <geometry><cylinder radius="${caster_post_radius}" length="${caster_post_length}"/></geometry>
+      <material name="gray"/>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="${pi/2.0} 0 0"/>
-      <geometry>
-        <cylinder radius="${wheel_radius}" length="${wheel_length}"/>
-      </geometry>
-    </collision>
     <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="0.20"/>
-      <inertia ixx="0.0002" ixy="0.0" ixz="0.0" iyy="0.0002" iyz="0.0" izz="0.0002"/>
+      <mass value="${caster_post_mass}"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
     </inertial>
   </link>
-  <joint name="left_wheel_joint" type="continuous">
-    <parent link="base_link"/>
-    <child link="left_wheel"/>
-    <origin xyz="${wheel_x_from_center} ${wheel_separation/2.0} 0" rpy="0 0 0"/>
-    <axis xyz="0 1 0"/>
+  <joint name="caster_mount_joint" type="fixed">
+    <parent link="chassis"/>
+    <child link="caster_mount"/>
+    <origin xyz="${caster_x_in_chassis} 0 ${-body_height/2.0 - caster_post_length/2.0}" rpy="0 0 0"/>
   </joint>
 
-  <!-- Right drive wheel -->
-  <link name="right_wheel">
-    <visual>
-      <origin xyz="0 0 0" rpy="${pi/2.0} 0 0"/>
-      <geometry>
-        <cylinder radius="${wheel_radius}" length="${wheel_length}"/>
-      </geometry>
-      <material name="black"/>
-    </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="${pi/2.0} 0 0"/>
-      <geometry>
-        <cylinder radius="${wheel_radius}" length="${wheel_length}"/>
-      </geometry>
-    </collision>
-    <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="0.20"/>
-      <inertia ixx="0.0002" ixy="0.0" ixz="0.0" iyy="0.0002" iyz="0.0" izz="0.0002"/>
-    </inertial>
-  </link>
-  <joint name="right_wheel_joint" type="continuous">
-    <parent link="base_link"/>
-    <child link="right_wheel"/>
-    <origin xyz="${wheel_x_from_center} ${-wheel_separation/2.0} 0" rpy="0 0 0"/>
-    <axis xyz="0 1 0"/>
-  </joint>
-
-  <!-- Simple caster placeholder -->
   <link name="caster_wheel">
-    <visual>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <sphere radius="${caster_radius}"/>
-      </geometry>
-      <material name="white"/>
-    </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <sphere radius="${caster_radius}"/>
-      </geometry>
-    </collision>
+    <visual><geometry><sphere radius="${caster_radius}"/></geometry><material name="white"/></visual>
+    <collision><geometry><sphere radius="${caster_radius}"/></geometry></collision>
     <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="0.05"/>
-      <inertia ixx="0.00005" ixy="0.0" ixz="0.0" iyy="0.00005" iyz="0.0" izz="0.00005"/>
+      <mass value="${caster_mass}"/>
+      <inertia ixx="${2.0*caster_mass*caster_radius*caster_radius/5.0}"
+               ixy="0" ixz="0"
+               iyy="${2.0*caster_mass*caster_radius*caster_radius/5.0}"
+               iyz="0"
+               izz="${2.0*caster_mass*caster_radius*caster_radius/5.0}"/>
     </inertial>
   </link>
   <joint name="caster_joint" type="fixed">
-    <parent link="base_link"/>
+    <parent link="chassis"/>
     <child link="caster_wheel"/>
-    <origin xyz="${caster_x_from_center} 0 ${-(wheel_radius - caster_radius)}" rpy="0 0 0"/>
+    <origin xyz="${caster_x_in_chassis} 0 ${caster_radius - body_center_z_from_base}" rpy="0 0 0"/>
   </joint>
-
 </robot>

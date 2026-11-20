@@ -1,12 +1,19 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="robot">
-
   <xacro:arg name="sim_mode" default="false"/>
   <xacro:arg name="use_ros2_control" default="false"/>
 
   <xacro:include filename="robot_core.xacro"/>
   <xacro:include filename="lidar.xacro"/>
   <xacro:include filename="camera.xacro"/>
-  <!-- face.xacro intentionally omitted -->
 
+  <!-- The simulation plugins are disabled for the real robot/RViz. -->
+  <xacro:if value="$(arg sim_mode)">
+    <xacro:if value="$(arg use_ros2_control)">
+      <xacro:include filename="ros2_control.xacro"/>
+    </xacro:if>
+    <xacro:unless value="$(arg use_ros2_control)">
+      <xacro:include filename="gazebo_control.xacro"/>
+    </xacro:unless>
+  </xacro:if>
 </robot>
