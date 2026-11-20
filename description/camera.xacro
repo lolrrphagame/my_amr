@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-  <!-- Camera lens at the CENTRE of the front face (+X), 120 mm from CHASSIS BOTTOM.
-       Camera points forward in +X; y=0. Height is NOT measured from the floor. -->
-  <xacro:property name="camera_height_above_bottom" value="0.120"/>
+  <!-- Camera lens at the CENTRE of the front face (+X), 120 mm from FLOOR (subtract chassis ground clearance).
+       Camera points forward in +X; y=0. Height is measured from the floor. -->
+  <xacro:property name="camera_height_above_bottom" value="${0.120 - chassis_ground_clearance}"/>
   <joint name="camera_joint" type="fixed">
     <parent link="chassis"/>
     <child link="camera_link"/>
